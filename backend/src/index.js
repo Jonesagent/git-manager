@@ -1,19 +1,28 @@
 // /opt/git-manager/backend/src/index.js
-// 占位后端服务，M1 会加入登录/RBAC/仓库同步等能力
-import http from 'node:http';
+import express from 'express';
+import { config } from './config.js';
+import { seedAdmin } from './db.js';
+import { router } from './routes.js';
 
-const PORT = process.env.PORT || 3001;
-
-const server = http.createServer((req, res) => {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  if (req.url === '/api/health') {
-    res.end(JSON.stringify({ ok: true, service: 'git-manager', ts: Date.now() }));
-    return;
-  }
-  res.statusCode = 404;
-  res.end(JSON.stringify({ ok: false, error: 'not_found' }));
+const app = express();
+app.set('trust proxy', 1);
+app.use(express.json({ limit: '1mb' }));
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`[git-manager] listening on 127.0.0.1:${PORT}`);
+app.use('/api', router);
+
+// 全局错误
+app.use((err, _req, res, _next) => {
+  console.error('[error]', err);
+  res.status(err.status || 500).json({ error: err.message || 'internal_error' });
+});
+
+// 启动前 seed admin
+seedAdmin();
+
+app.listen(config.port, '127.0.0.1', () => {
+  console.log(`[git-manager] listening on 127.0.0.1:${config.port} (env=${config.env})`);
 });

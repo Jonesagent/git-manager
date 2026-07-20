@@ -1,0 +1,47 @@
+:root {
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* dark overrides for Element Plus */
+.el-card, .el-table, .el-table__cell, .el-input__wrapper, .el-select__wrapper {
+  background-color: var(--bg-card) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+.el-table tr, .el-table td.el-table__cell {
+  background-color: var(--bg-card) !important;
+  color: var(--text) !important;
+  border-bottom-color: var(--border) !important;
+}
+.el-table__header-wrapper th {
+  background-color: #1c2128 !important;
+  color: var(--text) !important;
+}
+.el-button--primary { background: #238636 !important; border-color: #238636 !important; }
+.el-button--primary:hover { background: #2ea043 !important; border-color: #2ea043 !important; }
+.el-tag--dark { background-color: #21262d !important; }
+.el-menu { background-color: var(--bg-card) !important; border-color: var(--border) !important; }
+.el-menu-item { color: var(--text) !important; }
+.el-menu-item.is-active { color: var(--accent) !important; }
+.el-input__inner { color: var(--text) !important; }
+.el-input__wrapper { box-shadow: none !important; border: 1px solid var(--border) !important; }
+.el-dialog, .el-dialog__header, .el-dialog__body { background: var(--bg-card) !important; }
+.el-dialog__title, .el-dialog__headerbtn .el-dialog__close { color: var(--text) !important; }
+.el-form-item__label { color: var(--text-muted) !important; }
+.el-pagination { --el-pagination-bg-color: var(--bg-card); --el-pagination-button-color: var(--text); }
