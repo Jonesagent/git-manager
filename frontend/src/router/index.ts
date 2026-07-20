@@ -11,6 +11,7 @@ const routes = [
       { path: 'dashboard', name: 'dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '总览' } },
       { path: 'repos', name: 'repos', component: () => import('../views/Repos.vue'), meta: { title: '仓库' } },
       { path: 'repos/:name', name: 'repo-detail', component: () => import('../views/RepoDetail.vue'), meta: { title: '仓库详情' } },
+      { path: 'branches', name: 'branches', component: () => import('../views/Branches.vue'), meta: { title: '分支管理' } },
       { path: 'monthly', name: 'monthly', component: () => import('../views/Monthly.vue'), meta: { title: '月度管理' } },
       { path: 'hotfix', name: 'hotfix', component: () => import('../views/Hotfix.vue'), meta: { title: '热修复' } },
       { path: 'audit', name: 'audit', component: () => import('../views/Audit.vue'), meta: { title: '审计日志' } },

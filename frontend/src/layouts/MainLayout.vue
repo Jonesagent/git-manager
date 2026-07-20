@@ -33,7 +33,7 @@ import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import {
-  DataBoard, Coin, FolderOpened, Tools, Document, Setting,
+  DataBoard, Coin, FolderOpened, Share, Tools, Document, Setting,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -43,6 +43,7 @@ const auth = useAuthStore()
 const menuItems = [
   { path: '/dashboard', label: '总览', icon: DataBoard },
   { path: '/repos', label: '仓库', icon: Coin },
+  { path: '/branches', label: '分支管理', icon: Share },
   { path: '/monthly', label: '月度管理', icon: FolderOpened },
   { path: '/hotfix', label: '热修复', icon: Tools },
   { path: '/audit', label: '审计日志', icon: Document },

@@ -3,6 +3,7 @@ import express from 'express';
 import { authMiddleware, requireRole, login, changePassword } from './auth.js';
 import { db, audit } from './db.js';
 import { listRepos, listBranches, fetchRepo, createMonthly, mergeToMain, createHotfix } from './git.js';
+import { runScriptStream } from './stream.js';
 import { config } from './config.js';
 
 export const router = express.Router();
@@ -59,27 +60,22 @@ router.post('/repos/:name/fetch', authMiddleware, requireRole('tech_lead', 'deve
   } catch (e) { next(e); }
 });
 
-// ------- monthly -------
-router.post('/monthly/create', authMiddleware, requireRole('tech_lead'), async (req, res) => {
-  const { month, repos, dryRun = false } = req.body || {};
-  if (!/^[0-9]{6}$/.test(month || '')) return res.status(400).json({ error: 'invalid_month' });
-  const targets = Array.isArray(repos) && repos.length > 0 ? repos : config.managedRepos;
-  const results = [];
-  for (const name of targets) {
-    try {
-      const r = await createMonthly(name, month, { dryRun });
-      results.push({ repo: name, ...r });
-      audit({
-        userId: req.user.id, username: req.user.username,
-        action: dryRun ? 'monthly_create_dryrun' : 'monthly_create',
-        resource: name, detail: { month, exit: r.code },
-        status: r.code === 0 ? 'ok' : 'fail', ip: req.ip
-      });
-    } catch (e) {
-      results.push({ repo: name, error: e.message });
-    }
+// ------- monthly (SSE stream 版本) -------
+router.post('/monthly/create-stream', authMiddleware, requireRole('tech_lead'), (req, res) => {
+  const { name, month, dryRun = false } = req.body || {};
+  if (!name || !/^[0-9]{6}$/.test(month || '')) {
+    return res.status(400).json({ error: 'invalid params (need name + month YYYYMM)' });
   }
-  res.json({ month, dryRun, results });
+  audit({
+    userId: req.user.id, username: req.user.username,
+    action: dryRun ? 'monthly_create_dryrun' : 'monthly_create',
+    resource: name, detail: { month, mode: 'stream' },
+    status: 'started', ip: req.ip
+  });
+  runScriptStream(res, 'create-monthly.sh', [name, month], {
+    timeoutMs: 5 * 60_000,
+    env: { DRY_RUN: dryRun ? '1' : '0' },
+  });
 });
 
 router.post('/monthly/merge', authMiddleware, requireRole('tech_lead'), async (req, res) => {
@@ -95,18 +91,55 @@ router.post('/monthly/merge', authMiddleware, requireRole('tech_lead'), async (r
   res.status(r.code === 0 ? 200 : 500).json({ ok: r.code === 0, ...r });
 });
 
-// ------- hotfix -------
-router.post('/hotfix/create', authMiddleware, requireRole('tech_lead'), async (req, res) => {
+// ------- hotfix (SSE stream) -------
+router.post('/hotfix/create-stream', authMiddleware, requireRole('tech_lead'), (req, res) => {
   const { name, version, dryRun = false } = req.body || {};
-  if (!name || !version) return res.status(400).json({ error: 'missing_fields' });
-  const r = await createHotfix(name, version, { dryRun });
+  if (!name || !/^v\d+\.\d+\.\d+$/.test(version || '')) {
+    return res.status(400).json({ error: 'invalid params' });
+  }
   audit({
     userId: req.user.id, username: req.user.username,
     action: dryRun ? 'hotfix_create_dryrun' : 'hotfix_create',
-    resource: name, detail: { version, exit: r.code },
-    status: r.code === 0 ? 'ok' : 'fail', ip: req.ip
+    resource: name, detail: { version, mode: 'stream' },
+    status: 'started', ip: req.ip
   });
-  res.status(r.code === 0 ? 200 : 500).json({ ok: r.code === 0, ...r });
+  runScriptStream(res, 'hotfix.sh', [name, version], {
+    timeoutMs: 5 * 60_000,
+    env: { DRY_RUN: dryRun ? '1' : '0' },
+  });
+});
+
+// ------- 分支管理：通用创建 (SSE stream) -------
+router.post('/branches/create-stream', authMiddleware, requireRole('tech_lead', 'developer'), (req, res) => {
+  const { name, branch, source = 'main', push = true } = req.body || {};
+  if (!name || !branch) return res.status(400).json({ error: 'need name + branch' });
+  // 安全校验：分支名不能含特殊字符
+  if (!/^[a-zA-Z0-9._\/-]+$/.test(branch)) return res.status(400).json({ error: 'invalid branch name' });
+  audit({
+    userId: req.user.id, username: req.user.username,
+    action: 'branch_create', resource: name,
+    detail: { branch, source }, status: 'started', ip: req.ip
+  });
+  runScriptStream(res, 'create-branch.sh', [name, branch, source], {
+    timeoutMs: 5 * 60_000,
+    env: { PUSH: push ? '1' : '0' },
+  });
+});
+
+// ------- 分支管理：通用删除 (SSE stream) -------
+router.post('/branches/delete-stream', authMiddleware, requireRole('tech_lead'), (req, res) => {
+  const { name, branch, remoteOnly = false } = req.body || {};
+  if (!name || !branch) return res.status(400).json({ error: 'need name + branch' });
+  if (/^(main|master)$/.test(branch)) return res.status(400).json({ error: 'protected branch' });
+  audit({
+    userId: req.user.id, username: req.user.username,
+    action: 'branch_delete', resource: name,
+    detail: { branch, remoteOnly }, status: 'started', ip: req.ip
+  });
+  runScriptStream(res, 'delete-branch.sh', [name, branch], {
+    timeoutMs: 60_000,
+    env: { REMOTE_ONLY: remoteOnly ? '1' : '0' },
+  });
 });
 
 // ------- audit -------
