@@ -22,14 +22,21 @@
         </el-form-item>
       </el-form>
 
+      <!-- 执行汇总条 -->
+      <el-alert v-if="summary" :type="summary.fail > 0 ? 'warning' : 'success'" closable
+        @close="summary = null" style="margin-bottom: 12px">
+        {{ summary.text }}
+      </el-alert>
+
       <!-- 终端输出区 -->
       <div v-if="allRuns.length > 0" class="runs-section">
         <div v-for="(run, idx) in allRuns" :key="idx" class="run-block">
           <div class="run-header">
             <span class="run-repo">{{ run.repo }}</span>
-            <el-tag size="small" :type="run.status === 'running' ? 'warning' : run.status === 'ok' ? 'success' : run.status === 'skipped' ? 'info' : 'danger'">
-              {{ run.status === 'running' ? '⏳ 执行中' : run.status === 'ok' ? '✅ 成功' : run.status === 'skipped' ? '⏭️ 已跳过' : '❌ 失败' }}
+            <el-tag size="small" :type="runTagType(run.status)">
+              {{ runTagLabel(run.status) }}
             </el-tag>
+            <span v-if="run.message" class="run-msg">{{ run.message }}</span>
           </div>
           <Terminal :lines="run.lines" :running="run.status === 'running'" />
         </div>
@@ -76,12 +83,14 @@ import { useAuthStore } from '../stores/auth'
 import Terminal from '../components/Terminal.vue'
 
 interface Line { type: 'cmd' | 'stdout' | 'stderr' | 'info' | 'success' | 'error'; text: string }
-interface Run { repo: string; status: 'pending' | 'running' | 'ok' | 'skipped' | 'fail'; lines: Line[] }
+type RunStatus = 'pending' | 'running' | 'ok' | 'skipped' | 'fail'
+interface Run { repo: string; status: RunStatus; lines: Line[]; message: string }
 
 const auth = useAuthStore()
 const allRepos = ref<string[]>([])
 const running = ref(false)
 const allRuns = ref<Run[]>([])
+const summary = ref<{ text: string; fail: number } | null>(null)
 
 const createForm = reactive<{ month: string; repos: string[]; dryRun: boolean }>({
   month: new Date().getFullYear().toString() + String(new Date().getMonth() + 1).padStart(2, '0'),
@@ -94,6 +103,13 @@ const mergeForm = reactive<{ name: string; month: string; version: string; messa
 })
 const merging = ref(false)
 const mergeLines = ref<Line[]>([])
+
+function runTagType(s: RunStatus): any {
+  return { running: 'warning', ok: 'success', skipped: 'info', fail: 'danger', pending: 'info' }[s]
+}
+function runTagLabel(s: RunStatus): string {
+  return { running: '⏳ 执行中', ok: '✅ 成功', skipped: '⏭️ 已跳过', fail: '❌ 失败', pending: '⏳ 等待' }[s]
+}
 
 async function handleCreate() {
   if (!/^\d{6}$/.test(createForm.month)) return ElMessage.warning('请输入正确的年月')
@@ -111,19 +127,22 @@ async function handleCreate() {
   }
 
   running.value = true
-  allRuns.value = targets.map(r => ({ repo: r, status: 'pending', lines: [] }))
+  summary.value = null
+  // 用 splice 替换整个数组确保响应式
+  allRuns.value = targets.map(r => ({ repo: r, status: 'pending' as RunStatus, lines: [] as Line[], message: '' }))
 
   for (let i = 0; i < targets.length; i++) {
     const repoName = targets[i]
-    const run = allRuns.value[i]
-    run.status = 'running'
-    run.lines = [{ type: 'cmd', text: `create-monthly.sh ${repoName} ${createForm.month}${createForm.dryRun ? ' [DRY_RUN]' : ''}` }]
+    // 用 splice 触发响应式更新
+    allRuns.value.splice(i, 1, { ...allRuns.value[i], status: 'running', lines: [{ type: 'cmd', text: `create-monthly.sh ${repoName} ${createForm.month}${createForm.dryRun ? ' [DRY_RUN]' : ''}` }] })
 
     try {
-      await runSSE('/api/monthly/create-stream', { name: repoName, month: createForm.month, dryRun: createForm.dryRun }, run)
+      await runOne(repoName, i)
     } catch (e: any) {
-      run.lines.push({ type: 'error', text: e.message })
-      run.status = 'fail'
+      const run = allRuns.value[i]
+      run.lines.push({ type: 'error', text: e.message || String(e) })
+      run.message = e.message || String(e)
+      allRuns.value.splice(i, 1, { ...run, status: 'fail' })
     }
   }
 
@@ -131,29 +150,38 @@ async function handleCreate() {
   const ok = allRuns.value.filter(r => r.status === 'ok').length
   const skip = allRuns.value.filter(r => r.status === 'skipped').length
   const fail = allRuns.value.filter(r => r.status === 'fail').length
-  ElMessage[fail > 0 ? 'warning' : 'success'](
-    `完成：✅ ${ok} 创建  ⏭️ ${skip} 跳过  ❌ ${fail} 失败`
-  )
+  summary.value = {
+    text: `完成：✅ ${ok} 创建  ⏭️ ${skip} 跳过  ❌ ${fail} 失败`,
+    fail,
+  }
+  if (fail > 0) ElMessage.warning(`有 ${fail} 个仓库执行失败`)
+  else ElMessage.success('全部完成')
 }
 
-async function runSSE(url: string, body: any, run: Run) {
+async function runOne(repoName: string, idx: number) {
+  const url = '/api/monthly/create-stream'
+  const body = { name: repoName, month: createForm.month, dryRun: createForm.dryRun }
+  const token = auth.token || localStorage.getItem('token') || ''
+
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${auth.token}`,
+      'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify(body),
   })
+
   if (!resp.ok || !resp.body) {
-    const text = await resp.text()
-    run.lines.push({ type: 'error', text: `HTTP ${resp.status}: ${text}` })
-    run.status = 'fail'
-    return
+    const text = await resp.text().catch(() => '')
+    throw new Error(`HTTP ${resp.status}: ${text.substring(0, 200)}`)
   }
+
   const reader = resp.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let finalStatus: RunStatus = 'fail'
+  let finalMsg = ''
 
   while (true) {
     const { done, value } = await reader.read()
@@ -166,8 +194,15 @@ async function runSSE(url: string, body: any, run: Run) {
       const eventMatch = part.match(/^event: (.+)$/m)
       const dataMatch = part.match(/^data: (.+)$/m)
       if (!eventMatch || !dataMatch) continue
-      const event = eventMatch[1].trim()
-      const data = JSON.parse(dataMatch[1])
+
+      let event: string
+      let data: any
+      try {
+        event = eventMatch[1].trim()
+        data = JSON.parse(dataMatch[1])
+      } catch { continue }
+
+      const run = allRuns.value[idx]
 
       if (event === 'start') {
         run.lines.push({ type: 'info', text: `▶ pid=${data.pid}` })
@@ -178,20 +213,36 @@ async function runSSE(url: string, body: any, run: Run) {
       } else if (event === 'done') {
         if (data.code === 0) {
           run.lines.push({ type: 'success', text: '✅ 分支创建并推送成功' })
-          run.status = 'ok'
+          finalStatus = 'ok'
+          finalMsg = '创建成功'
         } else if (data.code === 10) {
-          run.lines.push({ type: 'info', text: `⏭️ ${data.result || '已存在，跳过'}` })
-          run.status = 'skipped'
+          const reason = data.result || 'exists'
+          run.lines.push({ type: 'info', text: `⏭️ 分支已存在，已跳过 (${reason})` })
+          finalStatus = 'skipped'
+          finalMsg = '分支已存在'
         } else {
           run.lines.push({ type: 'error', text: `❌ 失败 (exit=${data.code})` })
-          run.status = 'fail'
+          finalStatus = 'fail'
+          finalMsg = `exit=${data.code}`
         }
       } else if (event === 'timeout') {
-        run.lines.push({ type: 'error', text: '⏱️ 超时' })
-        run.status = 'fail'
+        run.lines.push({ type: 'error', text: '⏱️ 执行超时' })
+        finalStatus = 'fail'
+        finalMsg = '超时'
+      } else if (event === 'error') {
+        run.lines.push({ type: 'error', text: data.message })
+        finalStatus = 'fail'
+        finalMsg = data.message
       }
+
+      // 每次收到事件后触发响应式更新
+      allRuns.value.splice(idx, 1, { ...run })
     }
   }
+
+  // 最终状态
+  const run = allRuns.value[idx]
+  allRuns.value.splice(idx, 1, { ...run, status: finalStatus, message: finalMsg })
 }
 
 async function handleMerge() {
@@ -240,4 +291,5 @@ onMounted(async () => {
 .run-block { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .run-header { padding: 8px 16px; background: #161b22; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
 .run-repo { font-weight: 600; color: var(--accent); }
+.run-msg { color: var(--text-muted); font-size: 12px; margin-left: auto; }
 </style>
