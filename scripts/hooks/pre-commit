@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# 本地仓库 pre-commit hook 占位
+exit 0
