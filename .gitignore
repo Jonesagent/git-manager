@@ -14,7 +14,9 @@ data/ssh/
 
 # Logs
 logs/*.log
-logs/*.log.*
+logs/*.out
+logs/*.log
+logs/*.out.*
 !logs/.gitkeep
 
 # Managed repositories (由系统运行时拉取)
