@@ -119,6 +119,76 @@ router.get('/github/orgs', authMiddleware, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ------- README（优先本地文件，递归扫描子目录，回退 GitHub API）-------
+router.get('/repos/:name/readme', authMiddleware, async (req, res, next) => {
+  try {
+    const name = req.params.name;
+    const p = path.join(config.reposDir, name);
+    const readmeNames = ['README.md', 'readme.md', 'Readme.md', 'README.MD', 'README.rst', 'README.txt', 'README'];
+
+    // 指定文件（子目录切换）
+    const reqFile = req.query.file;
+    if (reqFile) {
+      const fp = path.join(p, String(reqFile));
+      // 安全检查：防止路径穿越
+      if (!fp.startsWith(p)) return res.status(400).json({ ok: false, error: 'invalid path' });
+      if (fs.existsSync(fp)) {
+        const content = fs.readFileSync(fp, 'utf-8');
+        return res.json({ ok: true, source: 'local', filename: String(reqFile), content });
+      }
+      return res.status(404).json({ ok: false, error: 'file not found' });
+    }
+
+    // 1. 根目录
+    for (const f of readmeNames) {
+      const fp = path.join(p, f);
+      if (fs.existsSync(fp)) {
+        const content = fs.readFileSync(fp, 'utf-8');
+        return res.json({ ok: true, source: 'local', filename: f, content });
+      }
+    }
+
+    // 2. 扫描一级子目录（如 auth-center-backend/README.md）
+    const found = [];
+    if (fs.existsSync(p)) {
+      const entries = fs.readdirSync(p, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+        for (const f of readmeNames) {
+          const fp = path.join(p, entry.name, f);
+          if (fs.existsSync(fp)) {
+            found.push({ filename: `${entry.name}/${f}`, path: fp });
+            break;
+          }
+        }
+      }
+    }
+    if (found.length > 0) {
+      // 返回第一个找到的，同时告知所有子目录 README 列表
+      const first = found[0];
+      const content = fs.readFileSync(first.path, 'utf-8');
+      return res.json({
+        ok: true, source: 'local', filename: first.filename, content,
+        subReadmes: found.map(f => f.filename),
+      });
+    }
+
+    // 3. 回退 GitHub API
+    const row = getManagedRepo(name);
+    const fullName = row?.full_name || `${config.github.org}/${name}`;
+    const resp = await fetch(`https://api.github.com/repos/${fullName}/readme`, {
+      headers: {
+        'Authorization': `token ${config.github.pat}`,
+        'Accept': 'application/vnd.github.raw',
+        'User-Agent': 'git-manager',
+      },
+    });
+    if (!resp.ok) return res.status(404).json({ ok: false, error: 'no_readme' });
+    const content = await resp.text();
+    res.json({ ok: true, source: 'github', filename: 'README.md', content });
+  } catch (e) { next(e); }
+});
+
 // ------- GitHub proxy (绕过 X-Frame-Options) -------
 router.get('/github/proxy/:owner/:repo/*', authMiddleware, proxyGithubPage);
 

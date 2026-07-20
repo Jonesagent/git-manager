@@ -58,8 +58,7 @@ const menuGroups = [
   {
     label: '仓库',
     items: [
-      { path: '/repos', label: '仓库列表', icon: Coin },
-      { path: '/repo-manage', label: '仓库管理', icon: Box },
+      { path: '/repos', label: '仓库', icon: Coin },
     ],
   },
   {

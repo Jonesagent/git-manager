@@ -122,6 +122,26 @@
           </div>
         </div>
       </el-tab-pane>
+      <!-- Tab 3: README -->
+      <el-tab-pane label="README" name="readme">
+        <div v-loading="loadingReadme">
+          <div v-if="readmeContent" class="readme-wrap">
+            <div class="readme-toolbar">
+              <el-select v-if="subReadmes.length > 1" v-model="readmeFilename" size="small"
+                style="width:260px" @change="loadReadmeByFile">
+                <el-option v-for="f in subReadmes" :key="f" :label="f" :value="f" />
+              </el-select>
+              <span v-else class="readme-file">{{ readmeFilename }}</span>
+              <el-tag size="small" :type="readmeSource === 'local' ? 'success' : 'info'">
+                {{ readmeSource === 'local' ? '本地文件' : 'GitHub' }}
+              </el-tag>
+              <el-button size="small" text @click="loadReadme" style="margin-left:auto">刷新</el-button>
+            </div>
+            <div class="readme-body" v-html="renderedReadme"></div>
+          </div>
+          <el-empty v-else-if="!loadingReadme" description="该仓库没有 README 文件" />
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 创建分支对话框 -->
@@ -168,6 +188,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Plus, Delete, Refresh, Switch } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { marked } from 'marked'
 import { api } from '../utils/api'
 import { useAuthStore } from '../stores/auth'
 import Terminal from '../components/Terminal.vue'
@@ -189,6 +210,17 @@ const terminalLines = ref<Line[]>([])
 
 const loadingOverview = ref(false)
 const overview = ref<any>(null)
+
+const loadingReadme = ref(false)
+const readmeContent = ref('')
+const readmeFilename = ref('')
+const readmeSource = ref('')
+const subReadmes = ref<string[]>([])
+
+const renderedReadme = computed(() => {
+  if (!readmeContent.value) return ''
+  return marked.parse(readmeContent.value) as string
+})
 
 const createForm = reactive<{ branch: string; source: string; push: boolean }>({
   branch: '', source: 'main', push: true,
@@ -230,6 +262,34 @@ async function loadOverview() {
   } catch {
     ElMessage.error('加载 GitHub 概览失败')
   } finally { loadingOverview.value = false }
+}
+
+async function loadReadme() {
+  if (!repoName.value) return
+  loadingReadme.value = true
+  try {
+    const { data } = await api.get(`/repos/${repoName.value}/readme`)
+    readmeContent.value = data.content || ''
+    readmeFilename.value = data.filename || 'README.md'
+    readmeSource.value = data.source || ''
+    subReadmes.value = data.subReadmes || (data.filename ? [data.filename] : [])
+  } catch {
+    readmeContent.value = ''
+  } finally { loadingReadme.value = false }
+}
+
+async function loadReadmeByFile(filename: string) {
+  // 切换子目录 README：直接读本地文件
+  if (!repoName.value) return
+  loadingReadme.value = true
+  try {
+    const { data } = await api.get(`/repos/${repoName.value}/readme?file=${encodeURIComponent(filename)}`)
+    readmeContent.value = data.content || ''
+    readmeFilename.value = data.filename || filename
+    readmeSource.value = data.source || ''
+  } catch {
+    ElMessage.error('加载失败')
+  } finally { loadingReadme.value = false }
 }
 
 async function handleCreate() {
@@ -335,6 +395,7 @@ async function runSSE(url: string, body: any) {
 watch(repoName, () => { if (repoName.value) loadBranches() })
 watch(activeTab, (tab) => {
   if (tab === 'overview' && !overview.value) loadOverview()
+  if (tab === 'readme' && !readmeContent.value) loadReadme()
 })
 onMounted(() => { if (repoName.value) loadBranches() })
 </script>
@@ -365,4 +426,47 @@ onMounted(() => { if (repoName.value) loadBranches() })
 .pr-title { flex: 1; font-size: 13px; }
 .pr-user { font-size: 12px; color: var(--text-muted); }
 .empty { color: var(--text-muted); text-align: center; padding: 20px; }
+
+/* README 渲染 */
+.readme-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.readme-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; background: #161b22; border-bottom: 1px solid var(--border);
+}
+.readme-file { font-family: monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+.readme-body {
+  padding: 28px 36px; background: #0d1117;
+  font-size: 15px; line-height: 1.75; color: #c9d1d9;
+  max-height: 700px; overflow-y: auto;
+}
+.readme-body h1, .readme-body h2, .readme-body h3, .readme-body h4 {
+  color: #f0f6fc; font-weight: 700; margin: 1.4em 0 .6em;
+  padding-bottom: .3em; border-bottom: 1px solid #21262d;
+}
+.readme-body h1 { font-size: 1.9em; }
+.readme-body h2 { font-size: 1.5em; }
+.readme-body h3 { font-size: 1.2em; border-bottom: none; }
+.readme-body p { margin: .8em 0; }
+.readme-body a { color: #58a6ff; text-decoration: none; }
+.readme-body a:hover { text-decoration: underline; }
+.readme-body code {
+  background: rgba(110,118,129,.25); padding: .2em .45em;
+  border-radius: 5px; font-size: .88em; font-family: 'SF Mono', Consolas, monospace;
+}
+.readme-body pre {
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  padding: 16px; overflow-x: auto; margin: 1em 0;
+}
+.readme-body pre code { background: none; padding: 0; font-size: 13px; }
+.readme-body blockquote {
+  border-left: 4px solid #3b82f6; padding: .4em 1em;
+  color: #8b949e; background: rgba(56,139,253,.06); margin: 1em 0;
+}
+.readme-body table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+.readme-body th, .readme-body td { border: 1px solid #30363d; padding: 8px 14px; text-align: left; }
+.readme-body th { background: #161b22; font-weight: 600; }
+.readme-body ul, .readme-body ol { padding-left: 1.8em; margin: .8em 0; }
+.readme-body li { margin: .3em 0; }
+.readme-body img { max-width: 100%; border-radius: 6px; }
+.readme-body hr { border: none; border-top: 1px solid #21262d; margin: 1.5em 0; }
 </style>
