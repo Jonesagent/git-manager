@@ -10,6 +10,7 @@ const routes = [
     children: [
       { path: 'dashboard', name: 'dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '总览' } },
       { path: 'repos', name: 'repos', component: () => import('../views/Repos.vue'), meta: { title: '仓库' } },
+      { path: 'repo-manage', name: 'repo-manage', component: () => import('../views/RepoManage.vue'), meta: { title: '仓库管理' } },
       { path: 'repos/:name', name: 'repo-detail', component: () => import('../views/RepoDetail.vue'), meta: { title: '仓库详情' } },
       { path: 'branches', name: 'branches', component: () => import('../views/Branches.vue'), meta: { title: '分支管理' } },
       { path: 'monthly', name: 'monthly', component: () => import('../views/Monthly.vue'), meta: { title: '月度管理' } },

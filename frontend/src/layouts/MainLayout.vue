@@ -43,6 +43,7 @@ const auth = useAuthStore()
 const menuItems = [
   { path: '/dashboard', label: '总览', icon: DataBoard },
   { path: '/repos', label: '仓库', icon: Coin },
+  { path: '/repo-manage', label: '仓库管理', icon: FolderOpened },
   { path: '/branches', label: '分支管理', icon: Share },
   { path: '/monthly', label: '月度管理', icon: FolderOpened },
   { path: '/hotfix', label: '热修复', icon: Tools },

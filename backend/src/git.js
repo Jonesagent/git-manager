@@ -9,7 +9,7 @@ import { config } from './config.js';
 const pExecFile = promisify(execFile);
 
 function repoPath(name) {
-  return path.join(config.reposRoot, name);
+  return path.join(config.reposDir, name);
 }
 
 function assertManaged(name) {
