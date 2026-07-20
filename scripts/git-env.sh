@@ -11,9 +11,14 @@ if [[ -f /opt/git-manager/data/.env ]]; then
   set +o allexport
 fi
 
-# 默认 org / 仓库列表 / 仓库根路径（复用 openhands 已下载好的目录）
+# 默认配置（可被环境变量覆盖）
 : "${GITHUB_ORG:=lionking-cloud}"
 : "${REPOS_ROOT:=/opt/openhands/projects}"
+
+# 优先使用 REPOS_DIR（从后端 config 传入），回退到 REPOS_ROOT
+if [[ -z "${REPOS_DIR:-}" ]]; then
+  REPOS_DIR="$REPOS_ROOT"
+fi
 
 REPOS=(
   auth-center
@@ -26,7 +31,7 @@ REPOS=(
   technical-center
 )
 
-# SSH-based git 操作（用户反馈 SSH 快，且已有 ~/.ssh 全局 key 生效）
+# SSH-based git 操作
 export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no"
 
 git_url() {
@@ -34,10 +39,9 @@ git_url() {
 }
 
 repo_path() {
-  echo "${REPOS_ROOT}/$1"
+  echo "${REPOS_DIR}/$1"
 }
 
-# 用于日志脱敏
 sanitize_url() {
   sed -E 's|https://[^@]+@|https://***@|g' <<<"$1"
 }

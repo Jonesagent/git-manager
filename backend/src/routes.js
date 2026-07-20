@@ -1,12 +1,14 @@
 // /opt/git-manager/backend/src/routes.js
 import express from 'express';
 import { authMiddleware, requireRole, login, changePassword } from './auth.js';
-import { db, audit, addManagedRepo, removeManagedRepo, getManagedRepos, getManagedRepo } from './db.js';
+import { db, audit, addManagedRepo, removeManagedRepo, getManagedRepos, getManagedRepo, updateRepoLocalPath } from './db.js';
 import { listRepos, listBranches, fetchRepo, createMonthly, mergeToMain, createHotfix } from './git.js';
 import { runScriptStream } from './stream.js';
 import { listGithubRepos, listOrgRepos, getRepo as getGithubRepo } from './github.js';
+import { proxyGithubPage, getRepoOverview } from './proxy.js';
 import { config } from './config.js';
 import path from 'node:path';
+import fs from 'node:fs';
 
 export const router = express.Router();
 
@@ -117,6 +119,53 @@ router.get('/github/orgs', authMiddleware, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ------- GitHub proxy (绕过 X-Frame-Options) -------
+router.get('/github/proxy/:owner/:repo/*', authMiddleware, proxyGithubPage);
+
+// ------- GitHub 仓库概览 (API 聚合) -------
+router.get('/github/overview/:owner/:repo', authMiddleware, async (req, res, next) => {
+  try {
+    const data = await getRepoOverview(req.params.owner, req.params.repo);
+    res.json(data);
+  } catch (e) { next(e); }
+});
+
+// ------- 配置管理 -------
+router.get('/config', authMiddleware, (req, res) => {
+  res.json({
+    reposDir: config.reposDir,
+    scriptsDir: config.scriptsDir,
+    org: config.github.org,
+    managedCount: config.managedRepos.length,
+  });
+});
+
+router.post('/config/repos-dir', authMiddleware, requireRole('tech_lead'), (req, res) => {
+  const { reposDir } = req.body || {};
+  if (!reposDir) return res.status(400).json({ error: 'need reposDir' });
+  // 验证路径存在
+  if (!fs.existsSync(reposDir)) {
+    try { fs.mkdirSync(reposDir, { recursive: true }); } catch {}
+  }
+  // 更新 config 和 .env
+  config.reposDir = reposDir;
+  // 写入 .env
+  const envPath = '/opt/git-manager/data/.env';
+  let envContent = fs.readFileSync(envPath, 'utf-8');
+  if (envContent.includes('REPOS_DIR=')) {
+    envContent = envContent.replace(/REPOS_DIR=.*/g, `REPOS_DIR=${reposDir}`);
+  } else {
+    envContent += `\nREPOS_DIR=${reposDir}\n`;
+  }
+  fs.writeFileSync(envPath, envContent);
+  audit({
+    userId: req.user.id, username: req.user.username,
+    action: 'config_change', resource: 'repos_dir',
+    detail: { reposDir }, status: 'ok', ip: req.ip,
+  });
+  res.json({ ok: true, reposDir: config.reposDir });
+});
+
 // ------- managed repo CRUD -------
 router.post('/repos/manage/add', authMiddleware, requireRole('tech_lead'), async (req, res, next) => {
   try {
@@ -187,6 +236,7 @@ router.post('/repos/manage/clone-stream', authMiddleware, requireRole('tech_lead
   });
   runScriptStream(res, 'clone-repo.sh', [ssh_url, name], {
     timeoutMs: 10 * 60_000,
+    env: { REPOS_DIR: config.reposDir },
   });
 });
 

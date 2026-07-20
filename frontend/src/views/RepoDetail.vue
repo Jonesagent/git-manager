@@ -1,6 +1,5 @@
 <template>
   <div v-if="repoName">
-    <!-- Tab 切换 -->
     <el-tabs v-model="activeTab" class="repo-detail-tabs">
       <!-- Tab 1: 分支列表 -->
       <el-tab-pane label="分支列表" name="branches">
@@ -42,15 +41,85 @@
         </el-table>
       </el-tab-pane>
 
-      <!-- Tab 2: GitHub 页面 -->
-      <el-tab-pane label="GitHub" name="github">
-        <div class="github-frame">
-          <div class="github-frame-header">
-            <el-link :href="githubUrl" target="_blank" type="primary">
-              {{ githubUrl }} ↗
-            </el-link>
+      <!-- Tab 2: GitHub 概览（API 聚合，不用 iframe） -->
+      <el-tab-pane label="GitHub 概览" name="overview">
+        <div v-loading="loadingOverview">
+          <div v-if="overview" class="overview-grid">
+            <!-- 仓库信息卡 -->
+            <el-card class="overview-card">
+              <template #header>
+                <span>📦 {{ overview.repo.full_name }}</span>
+                <el-link :href="overview.repo.html_url" target="_blank" type="primary" style="float:right">
+                  GitHub ↗
+                </el-link>
+              </template>
+              <div class="repo-meta">
+                <div v-if="overview.repo.description" class="meta-row">
+                  <span class="meta-label">描述</span>
+                  <span>{{ overview.repo.description }}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">默认分支</span>
+                  <el-tag size="small">{{ overview.repo.default_branch }}</el-tag>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">语言</span>
+                  <span>{{ overview.repo.language || '—' }}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="meta-label">License</span>
+                  <span>{{ overview.repo.license || '—' }}</span>
+                </div>
+                <div class="meta-row stats">
+                  <span>⭐ {{ overview.repo.stargazers_count }}</span>
+                  <span>🍴 {{ overview.repo.forks_count }}</span>
+                  <span>📋 {{ overview.repo.open_issues_count }} issues</span>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 分支概览 -->
+            <el-card class="overview-card">
+              <template #header><span>🌿 分支 ({{ overview.branches.length }})</span></template>
+              <div class="branch-list">
+                <div v-for="b in overview.branches.slice(0, 20)" :key="b.name" class="branch-row">
+                  <span class="branch-name" :class="b.name === overview.repo.default_branch ? 'main' : 'other'">{{ b.name }}</span>
+                  <span class="branch-sha">{{ b.sha }}</span>
+                  <el-tag v-if="b.protected" size="small" type="warning">protected</el-tag>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 最近提交 -->
+            <el-card class="overview-card">
+              <template #header><span>📝 最近提交</span></template>
+              <div class="commit-list">
+                <div v-for="c in overview.commits" :key="c.sha" class="commit-row">
+                  <img v-if="c.avatar" :src="c.avatar" class="commit-avatar" />
+                  <div class="commit-info">
+                    <div class="commit-msg">{{ c.message }}</div>
+                    <div class="commit-meta">
+                      <span>{{ c.author }}</span>
+                      <span>{{ c.sha }}</span>
+                      <span>{{ formatDate(c.date) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- PR 列表 -->
+            <el-card class="overview-card">
+              <template #header><span>🔀 Pull Requests ({{ overview.pulls.length }})</span></template>
+              <div v-if="overview.pulls.length === 0" class="empty">暂无 PR</div>
+              <div v-for="p in overview.pulls" :key="p.number" class="pr-row">
+                <el-tag size="small" :type="p.state === 'open' ? 'success' : 'info'">{{ p.state }}</el-tag>
+                <span class="pr-title">#{{ p.number }} {{ p.title }}</span>
+                <span class="pr-user">@{{ p.user }}</span>
+                <el-link :href="p.html_url" target="_blank" type="primary" size="small">查看 ↗</el-link>
+              </div>
+            </el-card>
           </div>
-          <iframe :src="githubUrl" class="github-iframe" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox" />
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -96,7 +165,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { Plus, Delete, Refresh, Switch } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../utils/api'
@@ -106,7 +175,6 @@ import Terminal from '../components/Terminal.vue'
 interface Line { type: 'cmd' | 'stdout' | 'stderr' | 'info' | 'success' | 'error'; text: string }
 
 const route = useRoute()
-const router = useRouter()
 const auth = useAuthStore()
 const repoName = computed(() => route.params.name as string)
 const activeTab = ref('branches')
@@ -118,6 +186,9 @@ const showCreateDialog = ref(false)
 const creating = ref(false)
 const executing = ref(false)
 const terminalLines = ref<Line[]>([])
+
+const loadingOverview = ref(false)
+const overview = ref<any>(null)
 
 const createForm = reactive<{ branch: string; source: string; push: boolean }>({
   branch: '', source: 'main', push: true,
@@ -131,15 +202,12 @@ const filteredBranches = computed(() => {
   return branches.value.filter(b => b.name.includes(search.value))
 })
 
-const sourceBranchOptions = computed(() => {
-  return branches.value.filter(b => b.kind !== 'main')
-})
+const sourceBranchOptions = computed(() => branches.value.filter(b => b.kind !== 'main'))
 
-const githubUrl = computed(() => {
-  // managedDetails 里有 html_url，但我们只有 name
-  // 构造 GitHub URL: https://github.com/{org}/{name}
-  return `https://github.com/lionking-cloud/${repoName.value}`
-})
+function formatDate(iso: string) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
+}
 
 async function loadBranches() {
   if (!repoName.value) return
@@ -153,6 +221,17 @@ async function loadBranches() {
   } finally { loadingBranches.value = false }
 }
 
+async function loadOverview() {
+  if (!repoName.value) return
+  loadingOverview.value = true
+  try {
+    const { data } = await api.get(`/github/overview/lionking-cloud/${repoName.value}`)
+    overview.value = data
+  } catch {
+    ElMessage.error('加载 GitHub 概览失败')
+  } finally { loadingOverview.value = false }
+}
+
 async function handleCreate() {
   if (!createForm.branch || !/^[a-zA-Z0-9._\/-]+$/.test(createForm.branch)) {
     return ElMessage.warning('请输入合法的分支名')
@@ -162,10 +241,7 @@ async function handleCreate() {
   terminalLines.value = [{ type: 'cmd', text: `create-branch.sh ${repoName.value} ${createForm.branch} ${createForm.source}` }]
   try {
     await runSSE('/api/branches/create-stream', {
-      name: repoName.value,
-      branch: createForm.branch,
-      source: createForm.source,
-      push: createForm.push,
+      name: repoName.value, branch: createForm.branch, source: createForm.source, push: createForm.push,
     })
     await loadBranches()
   } finally {
@@ -178,7 +254,7 @@ async function handleDelete(branch: any) {
   if (branch.kind === 'main') return
   try {
     await ElMessageBox.confirm(
-      `确认删除 ${repoName.value} 的分支 ${branch.name}？\n此操作不可撤销。`,
+      `确认删除 ${repoName.value} 的分支 ${branch.name}？`,
       '危险操作',
       { confirmButtonText: '⚠️ 确认删除', cancelButtonText: '取消', type: 'error' },
     )
@@ -202,19 +278,16 @@ async function handleCheckout(branch: any) {
   executing.value = true
   terminalLines.value = [{ type: 'cmd', text: `checkout-branch.sh ${repoName.value} ${branch.name}` }]
   try {
-    await runSSE(`/repos/${repoName.value}/checkout-stream`, { branch: branch.name }, 'checkout')
+    await runSSE(`/repos/${repoName.value}/checkout-stream`, { branch: branch.name })
     await loadBranches()
   } finally { executing.value = false }
 }
 
-async function runSSE(url: string, body: any, _type?: string) {
+async function runSSE(url: string, body: any) {
   const token = auth.token || localStorage.getItem('token') || ''
   const resp = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(body),
   })
   if (!resp.ok || !resp.body) {
@@ -249,36 +322,47 @@ async function runSSE(url: string, body: any, _type?: string) {
           ElMessage.success('操作成功')
         } else if (data.code === 10) {
           terminalLines.value.push({ type: 'info', text: `⏭️ ${data.result || '跳过'}` })
-          ElMessage.info(data.result || '已跳过')
         } else if (data.code === 30) {
           terminalLines.value.push({ type: 'error', text: '🚫 受保护分支' })
-          ElMessage.error('受保护分支')
         } else {
           terminalLines.value.push({ type: 'error', text: `❌ 失败 (exit=${data.code})` })
-          ElMessage.error('操作失败')
         }
       }
     }
   }
 }
 
-watch(repoName, (n) => {
-  if (n) loadBranches()
+watch(repoName, () => { if (repoName.value) loadBranches() })
+watch(activeTab, (tab) => {
+  if (tab === 'overview' && !overview.value) loadOverview()
 })
-
-onMounted(() => {
-  if (repoName.value) loadBranches()
-})
+onMounted(() => { if (repoName.value) loadBranches() })
 </script>
 
 <style scoped>
-.repo-detail-tabs { margin-bottom: 0; }
 .branch-name { font-weight: 600; }
-.branch-name.main { color: var(--red, #f85149); }
-.branch-name.monthly { color: var(--yellow, #d29922); }
-.branch-name.feature { color: var(--green, #3fb950); }
-.branch-name.hotfix { color: var(--accent, #58a6ff); }
-.github-frame { border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
-.github-frame-header { padding: 10px 16px; background: #161b22; border-bottom: 1px solid #30363d; }
-.github-iframe { width: 100%; height: 600px; border: none; background: #fff; }
+.branch-name.main { color: #f85149; }
+.branch-name.monthly { color: #d29922; }
+.branch-name.feature { color: #3fb950; }
+.branch-name.hotfix { color: #58a6ff; }
+.branch-name.other { color: #c9d1d9; }
+.overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.overview-card { margin-bottom: 0; }
+.repo-meta { display: flex; flex-direction: column; gap: 8px; }
+.meta-row { display: flex; gap: 12px; align-items: center; font-size: 14px; }
+.meta-label { color: var(--text-muted); min-width: 60px; }
+.stats { gap: 20px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.branch-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+.branch-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.branch-sha { color: var(--text-muted); font-size: 12px; font-family: monospace; }
+.commit-list { display: flex; flex-direction: column; gap: 12px; max-height: 350px; overflow-y: auto; }
+.commit-row { display: flex; gap: 10px; align-items: flex-start; }
+.commit-avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; }
+.commit-info { flex: 1; }
+.commit-msg { font-size: 13px; color: var(--text); }
+.commit-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.pr-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(48,54,61,.3); }
+.pr-title { flex: 1; font-size: 13px; }
+.pr-user { font-size: 12px; color: var(--text-muted); }
+.empty { color: var(--text-muted); text-align: center; padding: 20px; }
 </style>

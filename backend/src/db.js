@@ -111,6 +111,10 @@ export function removeManagedRepo(name) {
   return row;
 }
 
+export function updateRepoLocalPath(name, localPath) {
+  db.prepare('UPDATE managed_repos SET local_path = ? WHERE name = ? OR full_name = ?').run(localPath, name, name);
+}
+
 export function getManagedRepos() {
   return db.prepare('SELECT * FROM managed_repos ORDER BY owner, name').all();
 }
