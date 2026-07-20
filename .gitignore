@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+dist/
+build/
+
+# Data & Secrets
+data/*.db
+data/*.db-*
+data/ssh/
+!data/.gitkeep
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/*.log
+logs/*.log.*
+!logs/.gitkeep
+
+# Managed repositories (由系统运行时拉取)
+repos/*
+!repos/.gitkeep
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Temp
+tmp/
+*.tmp

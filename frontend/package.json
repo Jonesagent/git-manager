@@ -1,0 +1,11 @@
+{
+  "name": "git-manager-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "lionking-cloud 分支管理平台前端（占位）",
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'TODO: vite dev'",
+    "build": "echo 'TODO: vite build'"
+  }
+}
