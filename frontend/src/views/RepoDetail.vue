@@ -16,12 +16,12 @@
               <span :class="['branch-name', row.kind]">{{ row.name }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="类型" width="90" key="kind">
+          <el-table-column label="类型" width="100" key="kind">
             <template #default="{ row }">
               <el-tag size="small" :type="kindTagType(row.kind || 'other')">{{ kindLabels[row.kind || 'other'] || row.kind || '其他' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="来源" width="70" key="source">
+          <el-table-column label="来源" width="80" key="source">
             <template #default="{ row }">{{ row.remote ? '远程' : '本地' }}</template>
           </el-table-column>
           <el-table-column prop="sha" label="SHA" width="120" />
@@ -297,7 +297,11 @@ const createForm = reactive<{ branch: string; source: string; push: boolean }>({
 })
 
 const kindLabels: Record<string, string> = { main: '主分支', monthly: '月度', feature: '特性', hotfix: '热修复', other: '其他' }
-const kindTagTypes: Record<string, any> = { main: 'danger', monthly: 'warning', feature: 'success', hotfix: '', other: 'info' }
+const kindTagTypeMap: Record<string, any> = { main: 'danger', monthly: 'warning', feature: 'success', hotfix: '', other: 'info' }
+
+function kindTagType(kind: string) {
+  return kindTagTypeMap[kind] || 'info'
+}
 
 const filteredBranches = computed(() => {
   if (!search.value) return branches.value
@@ -309,7 +313,14 @@ const sourceBranchOptions = computed(() => branches.value.filter(b => b.kind !==
 function formatDate(iso: string) {
   if (!iso) return ''
   const d = new Date(iso)
-  return d.toISOString().replace('T', ' ').substring(0, 19)
+  // 转换为北京时间 (UTC+8)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  const seconds = String(d.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
 async function loadBranches() {

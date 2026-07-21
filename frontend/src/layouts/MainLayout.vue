@@ -17,13 +17,6 @@
           </router-link>
         </div>
       </nav>
-      <div class="user-box">
-        <div class="user-info">
-          <span class="user-name">{{ auth.user?.username }}</span>
-          <el-tag size="small" :type="roleTagType">{{ roleLabel }}</el-tag>
-        </div>
-        <el-button text size="small" @click="handleLogout">退出</el-button>
-      </div>
     </aside>
     <main class="content">
       <header class="topbar">
@@ -32,6 +25,30 @@
           <el-tooltip :content="isDark ? '切换为亮色' : '切换为暗色'" placement="bottom">
             <el-button text :icon="isDark ? Sunny : Moon" @click="handleToggleTheme" />
           </el-tooltip>
+          <div class="user-menu-wrapper" v-if="auth.user">
+            <el-dropdown @command="handleUserMenuCommand">
+              <span class="user-trigger">
+                <el-avatar :size="32" class="user-avatar">{{ auth.user.username.charAt(0).toUpperCase() }}</el-avatar>
+                <span class="user-info-box">
+                  <span class="user-name">{{ auth.user.username }}</span>
+                  <el-tag size="small" :type="roleTagType" class="user-role">{{ roleLabel }}</el-tag>
+                </span>
+                <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="settings">
+                    <el-icon><Setting /></el-icon>
+                    设置
+                  </el-dropdown-item>
+                  <el-dropdown-item divided command="logout">
+                    <el-icon><SwitchButton /></el-icon>
+                    退出登录
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
         </div>
       </header>
       <div class="page-body">
@@ -48,6 +65,7 @@ import { useAuthStore } from '../stores/auth'
 import { getStoredTheme, toggleTheme } from '../utils/theme'
 import {
   DataBoard, Coin, FolderOpened, Share, Tools, Document, Setting, Box, Branch, Sunny, Moon,
+  ArrowDown, SwitchButton
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -85,7 +103,6 @@ const menuGroups = [
     label: '系统',
     items: [
       { path: '/audit', label: '审计日志', icon: Document },
-      { path: '/settings', label: '设置', icon: Setting },
     ],
   },
 ]
@@ -107,6 +124,14 @@ const roleTagType = computed(() => {
 function handleLogout() {
   auth.logout()
   router.push('/login')
+}
+
+function handleUserMenuCommand(command: string) {
+  if (command === 'logout') {
+    handleLogout()
+  } else if (command === 'settings') {
+    router.push('/settings')
+  }
 }
 
 onMounted(() => { if (auth.token) auth.fetchMe() })
@@ -131,16 +156,21 @@ nav { flex: 1; padding: 8px 0; overflow-y: auto; }
 }
 .nav-item:hover { color: var(--text); background: rgba(255,255,255,.03); text-decoration: none; }
 .nav-item.active { color: var(--accent); background: rgba(88,166,255,.08); border-right: 3px solid var(--accent); }
-.user-box {
-  border-top: 1px solid var(--border); padding: 16px 20px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.user-name { color: var(--text); font-size: 14px; }
 .content { flex: 1; margin-left: 220px; display: flex; flex-direction: column; }
 .topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 .topbar h2 { font-size: 16px; color: var(--text); font-weight: 600; }
-.topbar-actions { display: flex; align-items: center; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
 .topbar-actions .el-button { color: var(--text-muted); font-size: 18px; }
 .topbar-actions .el-button:hover { color: var(--accent); }
+.user-menu-wrapper { margin-left: 8px; padding-left: 16px; border-left: 1px solid var(--border); }
+.user-trigger {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 4px 10px; border-radius: 6px; transition: background .15s;
+}
+.user-trigger:hover { background: rgba(255,255,255,.05); }
+.user-avatar { background: var(--accent); color: #fff; font-weight: 600; }
+.user-info-box { display: flex; flex-direction: column; gap: 2px; line-height: 1; }
+.user-name { color: var(--text); font-size: 13px; font-weight: 500; }
+.user-role { transform: scale(0.8); transform-origin: left center; width: fit-content; }
 .page-body { flex: 1; padding: 24px; overflow-y: auto; }
 </style>
