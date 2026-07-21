@@ -308,7 +308,8 @@ const sourceBranchOptions = computed(() => branches.value.filter(b => b.kind !==
 
 function formatDate(iso: string) {
   if (!iso) return ''
-  return new Date(iso).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' })
+  const d = new Date(iso)
+  return d.toISOString().replace('T', ' ').substring(0, 19)
 }
 
 async function loadBranches() {

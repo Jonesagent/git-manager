@@ -28,7 +28,9 @@
       </el-table-column>
       <el-table-column prop="sha" label="最新 SHA" width="120" />
       <el-table-column prop="last_commit_author" label="提交者" width="110" />
-      <el-table-column prop="last_commit_date" label="提交时间" width="170" />
+      <el-table-column prop="last_commit_date" label="提交时间" width="170">
+        <template #default="{ row }">{{ formatDate(row.last_commit_date) }}</template>
+      </el-table-column>
       <el-table-column prop="last_commit_subject" label="提交信息" min-width="200" show-overflow-tooltip />
       <el-table-column label="操作" width="100" fixed="right">
         <template #default="{ row }">
@@ -104,6 +106,11 @@ const createForm = reactive<{ branch: string; source: string; push: boolean }>({
 const kindLabels: Record<string, string> = { main: '主分支', monthly: '月度', feature: '特性', hotfix: '热修复', other: '其他' }
 const kindTagTypes: Record<string, any> = { main: 'danger', monthly: 'warning', feature: 'success', hotfix: '', other: 'info' }
 
+function formatDate(iso: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toISOString().replace('T', ' ').substring(0, 19)
+}
 const filteredBranches = computed(() => {
   if (!search.value) return branches.value
   return branches.value.filter(b => b.name.includes(search.value))

@@ -13,7 +13,9 @@
         </template>
       </el-table-column>
       <el-table-column prop="ip" label="IP" width="130" />
-      <el-table-column prop="created_at" label="时间" width="180" />
+      <el-table-column prop="created_at" label="时间" width="180">
+        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+      </el-table-column>
       <el-table-column prop="detail" label="详情" min-width="200" show-overflow-tooltip />
     </el-table>
     <div style="margin-top:12px;text-align:right;color:var(--text-muted);font-size:13px">
@@ -29,6 +31,11 @@ import { api } from '../utils/api'
 const loading = ref(false)
 const rows = ref<any[]>([])
 const total = ref(0)
+function formatDate(iso: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toISOString().replace('T', ' ').substring(0, 19)
+}
 
 onMounted(async () => {
   loading.value = true

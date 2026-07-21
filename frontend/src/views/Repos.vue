@@ -175,7 +175,8 @@ const filteredGithubRepos = computed(() => {
 
 function formatDate(iso: string) {
   if (!iso) return ''
-  return new Date(iso).toLocaleDateString('zh-CN')
+  const d = new Date(iso)
+  return d.toISOString().replace('T', ' ').substring(0, 19)
 }
 
 function goDetail(name: string) {
