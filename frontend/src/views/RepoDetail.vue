@@ -10,7 +10,7 @@
             :disabled="!auth.isTechLead && !auth.isDeveloper">创建分支</el-button>
         </div>
 
-        <el-table :data="filteredBranches" v-loading="loadingBranches" stripe size="default">
+        <el-table :data="filteredBranches" v-loading="loadingBranches" stripe border size="default">
           <el-table-column prop="name" label="分支名" min-width="220">
             <template #default="{ row }">
               <span :class="['branch-name', row.kind]">{{ row.name }}</span>
@@ -28,7 +28,7 @@
           <el-table-column prop="last_commit_author" label="提交者" width="110" />
           <el-table-column prop="last_commit_date" label="提交时间" width="170" />
           <el-table-column prop="last_commit_subject" label="提交信息" min-width="200" show-overflow-tooltip />
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column label="操作" width="150" show-overflow-tooltip>
             <template #default="{ row }">
               <el-button size="small" text type="success" :icon="Switch"
                 :disabled="row.kind === 'main'"
