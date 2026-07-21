@@ -18,12 +18,12 @@
           <span :class="['branch-name', row.kind]">{{ row.name }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="类型" width="90">
+      <el-table-column label="类型" width="90" key="kind">
         <template #default="{ row }">
-          <el-tag size="small" :type="kindTagType(row.kind)">{{ kindLabels[row.kind] || row.kind }}</el-tag>
+          <el-tag size="small" :type="kindTagType(row.kind || 'other')">{{ kindLabels[row.kind || 'other'] || row.kind || '其他' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="来源" width="70">
+      <el-table-column label="来源" width="70" key="source">
         <template #default="{ row }">{{ row.remote ? '远程' : '本地' }}</template>
       </el-table-column>
       <el-table-column prop="sha" label="最新 SHA" width="120" />
@@ -32,7 +32,7 @@
         <template #default="{ row }">{{ formatDate(row.last_commit_date) }}</template>
       </el-table-column>
       <el-table-column prop="last_commit_subject" label="提交信息" min-width="200" show-overflow-tooltip />
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="100" show-overflow-tooltip key="actions">
         <template #default="{ row }">
           <el-button size="small" type="danger" text :icon="Delete"
             :disabled="row.kind === 'main' || !auth.isTechLead"
