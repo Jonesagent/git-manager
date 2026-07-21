@@ -142,6 +142,56 @@
           <el-empty v-else-if="!loadingReadme" description="该仓库没有 README 文件" />
         </div>
       </el-tab-pane>
+
+      <!-- Tab 4: 文件浏览（本地仓库，左目录/右内容） -->
+      <el-tab-pane label="文件" name="files">
+        <div v-loading="loadingFiles" class="files-browser">
+          <div class="files-breadcrumb">
+            <span class="crumb" @click="navigateTo('')">📁 {{ repoName }}</span>
+            <template v-for="(seg, i) in pathSegments" :key="i">
+              <span class="crumb-sep">/</span>
+              <span class="crumb" @click="navigateTo(seg.path)">{{ seg.name }}</span>
+            </template>
+            <el-button size="small" text style="margin-left:auto" @click="loadFiles(currentPath)">刷新</el-button>
+          </div>
+          <div class="files-panes">
+            <!-- 左：目录/文件列表 -->
+            <div class="files-list">
+              <div v-if="currentPath" class="file-row up" @click="goUp">
+                <span class="file-icon">⬆️</span>
+                <span class="file-name">..</span>
+              </div>
+              <div v-for="e in fileEntries" :key="e.name" class="file-row"
+                :class="{ active: selectedFile === joinPath(currentPath, e.name) }"
+                @click="e.type === 'dir' ? navigateTo(joinPath(currentPath, e.name)) : openFile(joinPath(currentPath, e.name))">
+                <span class="file-icon">{{ e.type === 'dir' ? '📁' : fileIcon(e.name) }}</span>
+                <span class="file-name">{{ e.name }}</span>
+                <span v-if="e.type === 'file'" class="file-size">{{ formatSize(e.size) }}</span>
+              </div>
+              <el-empty v-if="!loadingFiles && fileEntries.length === 0" description="空目录" :image-size="60" />
+            </div>
+            <!-- 右：文件内容预览 -->
+            <div class="file-preview">
+              <div v-if="!selectedFile" class="preview-empty">
+                <el-empty description="选择左侧文件查看内容" :image-size="80" />
+              </div>
+              <template v-else>
+                <div class="preview-header">
+                  <span class="preview-path">{{ selectedFile }}</span>
+                  <el-tag v-if="fileMeta.binary" size="small" type="warning">二进制</el-tag>
+                  <el-tag v-else-if="fileMeta.tooLarge" size="small" type="warning">过大</el-tag>
+                  <el-tag v-else size="small">{{ formatSize(fileMeta.size || 0) }}</el-tag>
+                </div>
+                <div v-if="fileMeta.binary || fileMeta.tooLarge" class="preview-notice">
+                  {{ fileMeta.binary ? '二进制文件，无法预览' : '文件超过 2MB，无法预览' }}
+                </div>
+                <div v-else-if="isMarkdown(selectedFile)" class="readme-body" v-html="renderedFileContent"></div>
+                <pre v-else class="code-preview">{{ fileContent }}</pre>
+              </template>
+            </div>
+          </div>
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 创建分支对话框 -->
@@ -217,6 +267,26 @@ const readmeFilename = ref('')
 const readmeSource = ref('')
 const subReadmes = ref<string[]>([])
 
+// 文件浏览状态
+const loadingFiles = ref(false)
+const filesInited = ref(false)
+const currentPath = ref('')
+const fileEntries = ref<any[]>([])
+const selectedFile = ref('')
+const fileContent = ref('')
+const fileMeta = ref<any>({})
+
+const pathSegments = computed(() => {
+  if (!currentPath.value) return []
+  const parts = currentPath.value.split('/').filter(Boolean)
+  return parts.map((name, i) => ({ name, path: parts.slice(0, i + 1).join('/') }))
+})
+
+const renderedFileContent = computed(() => {
+  if (!fileContent.value) return ''
+  return marked.parse(fileContent.value) as string
+})
+
 const renderedReadme = computed(() => {
   if (!readmeContent.value) return ''
   return marked.parse(readmeContent.value) as string
@@ -257,10 +327,10 @@ async function loadOverview() {
   if (!repoName.value) return
   loadingOverview.value = true
   try {
-    const { data } = await api.get(`/github/overview/lionking-cloud/${repoName.value}`)
+    const { data } = await api.get(`/repos/${repoName.value}/overview`)
     overview.value = data
-  } catch {
-    ElMessage.error('加载 GitHub 概览失败')
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.error || '加载 GitHub 概览失败')
   } finally { loadingOverview.value = false }
 }
 
@@ -290,6 +360,64 @@ async function loadReadmeByFile(filename: string) {
   } catch {
     ElMessage.error('加载失败')
   } finally { loadingReadme.value = false }
+}
+
+// ------- 文件浏览 -------
+function joinPath(base: string, name: string) {
+  return base ? `${base}/${name}` : name
+}
+function isMarkdown(p: string) {
+  return /\.md$/i.test(p)
+}
+function fileIcon(name: string) {
+  if (/\.(md|txt|rst)$/i.test(name)) return '📄'
+  if (/\.(js|ts|vue|json|sh|py|java|xml|yml|yaml|css|html)$/i.test(name)) return '📝'
+  if (/\.(png|jpe?g|gif|svg|ico|webp)$/i.test(name)) return '🖼️'
+  if (/\.(zip|tar|gz|jar|class)$/i.test(name)) return '📦'
+  return '📄'
+}
+function formatSize(bytes: number) {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0, n = bytes
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
+  return `${n.toFixed(i ? 1 : 0)} ${units[i]}`
+}
+
+async function loadFiles(path = '') {
+  if (!repoName.value) return
+  loadingFiles.value = true
+  try {
+    const { data } = await api.get(`/repos/${repoName.value}/files`, { params: { path } })
+    fileEntries.value = data.entries || []
+    currentPath.value = path
+  } catch {
+    ElMessage.error('加载文件列表失败')
+    fileEntries.value = []
+  } finally { loadingFiles.value = false }
+}
+
+function navigateTo(path: string) {
+  loadFiles(path)
+}
+
+function goUp() {
+  const parts = currentPath.value.split('/').filter(Boolean)
+  parts.pop()
+  loadFiles(parts.join('/'))
+}
+
+async function openFile(path: string) {
+  selectedFile.value = path
+  fileContent.value = ''
+  fileMeta.value = {}
+  try {
+    const { data } = await api.get(`/repos/${repoName.value}/file-content`, { params: { path } })
+    fileContent.value = data.content || ''
+    fileMeta.value = { size: data.size, binary: data.binary, tooLarge: data.tooLarge }
+  } catch {
+    ElMessage.error('读取文件失败')
+  }
 }
 
 async function handleCreate() {
@@ -396,6 +524,7 @@ watch(repoName, () => { if (repoName.value) loadBranches() })
 watch(activeTab, (tab) => {
   if (tab === 'overview' && !overview.value) loadOverview()
   if (tab === 'readme' && !readmeContent.value) loadReadme()
+  if (tab === 'files' && !filesInited.value) { filesInited.value = true; loadFiles('') }
 })
 onMounted(() => { if (repoName.value) loadBranches() })
 </script>
@@ -427,46 +556,84 @@ onMounted(() => { if (repoName.value) loadBranches() })
 .pr-user { font-size: 12px; color: var(--text-muted); }
 .empty { color: var(--text-muted); text-align: center; padding: 20px; }
 
-/* README 渲染 */
+/* 文件浏览 */
+.files-browser { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.files-breadcrumb {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--bg-elevated, var(--bg-card));
+  border-bottom: 1px solid var(--border);
+}
+.crumb { cursor: pointer; color: var(--accent); font-size: 13px; }
+.crumb:hover { text-decoration: underline; }
+.crumb-sep { color: var(--text-muted); }
+.files-panes { display: flex; height: 560px; }
+.files-list { width: 320px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; }
+.file-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+  cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-light, rgba(48,54,61,.25));
+}
+.file-row:hover { background: var(--bg-hover, rgba(88,166,255,.06)); }
+.file-row.active { background: var(--bg-active, rgba(88,166,255,.12)); }
+.file-row.up { color: var(--text-muted); }
+.file-icon { flex-shrink: 0; }
+.file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.file-size { color: var(--text-muted); font-size: 11px; }
+.file-preview { flex: 1; overflow: auto; display: flex; flex-direction: column; min-width: 0; }
+.preview-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
+.preview-header {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  border-bottom: 1px solid var(--border); background: var(--bg-elevated, var(--bg-card));
+}
+.preview-path {
+  font-family: 'SF Mono', Consolas, monospace; font-size: 12px; color: var(--accent);
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.preview-notice { padding: 40px; text-align: center; color: var(--text-muted); }
+.code-preview {
+  padding: 16px 20px; margin: 0; font-family: 'SF Mono', Consolas, monospace;
+  font-size: 13px; line-height: 1.6; color: var(--text); white-space: pre; overflow: auto;
+}
+
+/* README / Markdown 渲染（变量驱动，适配亮/暗主题） */
 .readme-wrap { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .readme-toolbar {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px; background: #161b22; border-bottom: 1px solid var(--border);
+  padding: 10px 16px; background: var(--bg-elevated); border-bottom: 1px solid var(--border);
 }
 .readme-file { font-family: monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
 .readme-body {
-  padding: 28px 36px; background: #0d1117;
-  font-size: 15px; line-height: 1.75; color: #c9d1d9;
+  padding: 28px 36px; background: var(--bg);
+  font-size: 15px; line-height: 1.75; color: var(--text);
   max-height: 700px; overflow-y: auto;
 }
 .readme-body h1, .readme-body h2, .readme-body h3, .readme-body h4 {
-  color: #f0f6fc; font-weight: 700; margin: 1.4em 0 .6em;
-  padding-bottom: .3em; border-bottom: 1px solid #21262d;
+  color: var(--text-strong); font-weight: 700; margin: 1.4em 0 .6em;
+  padding-bottom: .3em; border-bottom: 1px solid var(--border);
 }
 .readme-body h1 { font-size: 1.9em; }
 .readme-body h2 { font-size: 1.5em; }
 .readme-body h3 { font-size: 1.2em; border-bottom: none; }
 .readme-body p { margin: .8em 0; }
-.readme-body a { color: #58a6ff; text-decoration: none; }
+.readme-body a { color: var(--accent); text-decoration: none; }
 .readme-body a:hover { text-decoration: underline; }
 .readme-body code {
-  background: rgba(110,118,129,.25); padding: .2em .45em;
+  background: var(--code-bg, rgba(110,118,129,.25)); padding: .2em .45em;
   border-radius: 5px; font-size: .88em; font-family: 'SF Mono', Consolas, monospace;
 }
 .readme-body pre {
-  background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px;
   padding: 16px; overflow-x: auto; margin: 1em 0;
 }
 .readme-body pre code { background: none; padding: 0; font-size: 13px; }
 .readme-body blockquote {
-  border-left: 4px solid #3b82f6; padding: .4em 1em;
-  color: #8b949e; background: rgba(56,139,253,.06); margin: 1em 0;
+  border-left: 4px solid var(--accent); padding: .4em 1em;
+  color: var(--text-muted); background: var(--blockquote-bg, rgba(56,139,253,.06)); margin: 1em 0;
 }
 .readme-body table { border-collapse: collapse; margin: 1em 0; width: 100%; }
-.readme-body th, .readme-body td { border: 1px solid #30363d; padding: 8px 14px; text-align: left; }
-.readme-body th { background: #161b22; font-weight: 600; }
+.readme-body th, .readme-body td { border: 1px solid var(--border); padding: 8px 14px; text-align: left; }
+.readme-body th { background: var(--bg-elevated); font-weight: 600; color: var(--text-strong); }
 .readme-body ul, .readme-body ol { padding-left: 1.8em; margin: .8em 0; }
 .readme-body li { margin: .3em 0; }
 .readme-body img { max-width: 100%; border-radius: 6px; }
-.readme-body hr { border: none; border-top: 1px solid #21262d; margin: 1.5em 0; }
+.readme-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
 </style>

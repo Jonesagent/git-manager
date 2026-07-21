@@ -189,15 +189,85 @@ router.get('/repos/:name/readme', authMiddleware, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ------- GitHub 仓库概览（按仓库名，自动解析真实 owner，修复 lionking-cloud 硬编码导致的 404/500）-------
+router.get('/repos/:name/overview', authMiddleware, async (req, res) => {
+  try {
+    const name = req.params.name;
+    const row = getManagedRepo(name);
+    const fullName = row?.full_name || `${config.github.org}/${name}`;
+    const [owner, repo] = fullName.split('/');
+    const data = await getRepoOverview(owner, repo);
+    res.json(data);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// ------- 本地仓库文件浏览 -------
+// 列出目录内容（隐藏 .git，目录在前）
+router.get('/repos/:name/files', authMiddleware, async (req, res, next) => {
+  try {
+    const name = req.params.name;
+    const repoRoot = path.resolve(config.reposDir, name);
+    const reqPath = String(req.query.path || '');
+    const target = path.resolve(repoRoot, reqPath);
+    // 防路径穿越
+    if (target !== repoRoot && !target.startsWith(repoRoot + path.sep)) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+    if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+      return res.status(400).json({ error: 'not a directory' });
+    }
+    const entries = fs.readdirSync(target, { withFileTypes: true })
+      .filter(e => e.name !== '.git')
+      .map(e => {
+        const full = path.join(target, e.name);
+        let size = 0;
+        try { size = fs.statSync(full).size; } catch {}
+        return { name: e.name, type: e.isDirectory() ? 'dir' : 'file', size };
+      })
+      .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
+    res.json({ path: reqPath, entries });
+  } catch (e) { next(e); }
+});
+
+// 读取文件内容（限制 2MB，二进制/超大文件只返回元信息）
+router.get('/repos/:name/file-content', authMiddleware, async (req, res, next) => {
+  try {
+    const name = req.params.name;
+    const repoRoot = path.resolve(config.reposDir, name);
+    const reqPath = String(req.query.path || '');
+    const target = path.resolve(repoRoot, reqPath);
+    if (!target.startsWith(repoRoot + path.sep)) {
+      return res.status(400).json({ error: 'invalid path' });
+    }
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+      return res.status(400).json({ error: 'not a file' });
+    }
+    const stat = fs.statSync(target);
+    const MAX = 2 * 1024 * 1024;
+    if (stat.size > MAX) {
+      return res.json({ path: reqPath, size: stat.size, tooLarge: true, content: '' });
+    }
+    const buf = fs.readFileSync(target);
+    if (buf.includes(0)) {
+      return res.json({ path: reqPath, size: stat.size, binary: true, content: '' });
+    }
+    res.json({ path: reqPath, size: stat.size, content: buf.toString('utf-8') });
+  } catch (e) { next(e); }
+});
+
 // ------- GitHub proxy (绕过 X-Frame-Options) -------
 router.get('/github/proxy/:owner/:repo/*', authMiddleware, proxyGithubPage);
 
-// ------- GitHub 仓库概览 (API 聚合) -------
-router.get('/github/overview/:owner/:repo', authMiddleware, async (req, res, next) => {
+// ------- GitHub 仓库概览 (API 聚合，兼容旧调用) -------
+router.get('/github/overview/:owner/:repo', authMiddleware, async (req, res) => {
   try {
     const data = await getRepoOverview(req.params.owner, req.params.repo);
     res.json(data);
-  } catch (e) { next(e); }
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
 });
 
 // ------- 配置管理 -------

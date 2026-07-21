@@ -1,24 +1,60 @@
+/* ===== 主题变量：默认暗色 ===== */
 :root {
   --bg: #0d1117;
   --bg-card: #161b22;
+  --bg-elevated: #1c2128;
   --border: #30363d;
+  --border-light: rgba(48, 54, 61, .25);
   --text: #c9d1d9;
+  --text-strong: #f0f6fc;
   --text-muted: #8b949e;
   --accent: #58a6ff;
   --green: #3fb950;
   --yellow: #d29922;
   --red: #f85149;
+  --bg-hover: rgba(88, 166, 255, .06);
+  --bg-active: rgba(88, 166, 255, .12);
+  --code-bg: rgba(110, 118, 129, .25);
+  --blockquote-bg: rgba(56, 139, 253, .06);
+  --primary-btn: #238636;
+  --primary-btn-hover: #2ea043;
+  color-scheme: dark;
 }
+
+/* ===== 亮色主题 ===== */
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-card: #f6f8fa;
+  --bg-elevated: #eaeef2;
+  --border: #d0d7de;
+  --border-light: rgba(208, 215, 222, .5);
+  --text: #1f2328;
+  --text-strong: #1f2328;
+  --text-muted: #656d76;
+  --accent: #0969da;
+  --green: #1a7f37;
+  --yellow: #9a6700;
+  --red: #cf222e;
+  --bg-hover: rgba(9, 105, 218, .06);
+  --bg-active: rgba(9, 105, 218, .12);
+  --code-bg: rgba(175, 184, 193, .25);
+  --blockquote-bg: rgba(9, 105, 218, .05);
+  --primary-btn: #1f883d;
+  --primary-btn-hover: #1a7f37;
+  color-scheme: light;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   background: var(--bg);
   color: var(--text);
+  transition: background .25s ease, color .25s ease;
 }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
-/* dark overrides for Element Plus */
+/* ===== Element Plus 主题适配（变量驱动） ===== */
 .el-card, .el-table, .el-table__cell, .el-input__wrapper, .el-select__wrapper {
   background-color: var(--bg-card) !important;
   color: var(--text) !important;
@@ -30,12 +66,15 @@ a:hover { text-decoration: underline; }
   border-bottom-color: var(--border) !important;
 }
 .el-table__header-wrapper th {
-  background-color: #1c2128 !important;
+  background-color: var(--bg-elevated) !important;
   color: var(--text) !important;
 }
-.el-button--primary { background: #238636 !important; border-color: #238636 !important; }
-.el-button--primary:hover { background: #2ea043 !important; border-color: #2ea043 !important; }
-.el-tag--dark { background-color: #21262d !important; }
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: var(--bg-elevated) !important;
+}
+.el-button--primary { background: var(--primary-btn) !important; border-color: var(--primary-btn) !important; }
+.el-button--primary:hover { background: var(--primary-btn-hover) !important; border-color: var(--primary-btn-hover) !important; }
+.el-tag--dark { background-color: var(--bg-elevated) !important; }
 .el-menu { background-color: var(--bg-card) !important; border-color: var(--border) !important; }
 .el-menu-item { color: var(--text) !important; }
 .el-menu-item.is-active { color: var(--accent) !important; }
@@ -45,3 +84,10 @@ a:hover { text-decoration: underline; }
 .el-dialog__title, .el-dialog__headerbtn .el-dialog__close { color: var(--text) !important; }
 .el-form-item__label { color: var(--text-muted) !important; }
 .el-pagination { --el-pagination-bg-color: var(--bg-card); --el-pagination-button-color: var(--text); }
+.el-empty__description p { color: var(--text-muted) !important; }
+.el-tabs__item { color: var(--text-muted) !important; }
+.el-tabs__item.is-active { color: var(--accent) !important; }
+.el-tabs__nav-wrap::after { background-color: var(--border) !important; }
+.el-select-dropdown, .el-popper { background: var(--bg-card) !important; border-color: var(--border) !important; }
+.el-select-dropdown__item { color: var(--text) !important; }
+.el-select-dropdown__item.hover, .el-select-dropdown__item:hover { background: var(--bg-hover) !important; }

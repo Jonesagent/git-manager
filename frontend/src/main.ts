@@ -6,6 +6,10 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from '@/App.vue'
 import { router } from '@/router'
 import '@/style.css'
+import { applyTheme, getStoredTheme } from '@/utils/theme'
+
+// 启动时应用已保存的主题（默认暗色）
+applyTheme(getStoredTheme())
 
 const app = createApp(App)
 app.use(createPinia())

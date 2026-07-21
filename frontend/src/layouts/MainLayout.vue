@@ -28,6 +28,11 @@
     <main class="content">
       <header class="topbar">
         <h2>{{ route.meta.title || 'Git Manager' }}</h2>
+        <div class="topbar-actions">
+          <el-tooltip :content="isDark ? '切换为亮色' : '切换为暗色'" placement="bottom">
+            <el-button text :icon="isDark ? Sunny : Moon" @click="handleToggleTheme" />
+          </el-tooltip>
+        </div>
       </header>
       <div class="page-body">
         <router-view />
@@ -37,16 +42,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { getStoredTheme, toggleTheme } from '../utils/theme'
 import {
-  DataBoard, Coin, FolderOpened, Share, Tools, Document, Setting, Box, Branch,
+  DataBoard, Coin, FolderOpened, Share, Tools, Document, Setting, Box, Branch, Sunny, Moon,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
+// 主题切换
+const isDark = ref(getStoredTheme() === 'dark')
+function handleToggleTheme() {
+  isDark.value = toggleTheme() === 'dark'
+}
 
 const menuGroups = [
   {
@@ -125,7 +137,10 @@ nav { flex: 1; padding: 8px 0; overflow-y: auto; }
 }
 .user-name { color: var(--text); font-size: 14px; }
 .content { flex: 1; margin-left: 220px; display: flex; flex-direction: column; }
-.topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; }
+.topbar { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 .topbar h2 { font-size: 16px; color: var(--text); font-weight: 600; }
+.topbar-actions { display: flex; align-items: center; }
+.topbar-actions .el-button { color: var(--text-muted); font-size: 18px; }
+.topbar-actions .el-button:hover { color: var(--accent); }
 .page-body { flex: 1; padding: 24px; overflow-y: auto; }
 </style>

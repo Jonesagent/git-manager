@@ -60,21 +60,34 @@ export async function proxyGithubPage(req, res) {
 }
 
 // 用 GitHub API 获取仓库概览数据（更可靠）
+// 健壮化：仓库本身请求失败抛清晰错误；分支/提交/PR 子请求失败用空数组兜底，不再整体 500
 export async function getRepoOverview(owner, repo) {
   const h = ghHeaders();
-  
+
+  const safeJson = async (resp) => {
+    try { return await resp.json(); } catch { return null; }
+  };
+
   const [repoResp, branchesResp, commitsResp, pullsResp] = await Promise.all([
     fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: h }),
     fetch(`https://api.github.com/repos/${owner}/${repo}/branches?per_page=30`, { headers: h }),
     fetch(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=10`, { headers: h }),
     fetch(`https://api.github.com/repos/${owner}/${repo}/pulls?per_page=10&state=all`, { headers: h }),
   ]);
-  
-  const repoData = await repoResp.json();
-  const branches = await branchesResp.json();
-  const commits = await commitsResp.json();
-  const pulls = await pullsResp.json();
-  
+
+  // 仓库主体请求失败（404/鉴权/限流）→ 抛带状态码的清晰错误
+  const repoData = await safeJson(repoResp);
+  if (!repoResp.ok || !repoData || repoData.message) {
+    const e = new Error(`GitHub 仓库 ${owner}/${repo} 加载失败: ${repoData?.message || repoResp.status}`);
+    e.status = repoResp.status === 404 ? 404 : 502;
+    throw e;
+  }
+
+  const branches = await safeJson(branchesResp);
+  const commits = await safeJson(commitsResp);
+  const pulls = await safeJson(pullsResp);
+  const arr = (x) => (Array.isArray(x) ? x : []);
+
   return {
     repo: {
       full_name: repoData.full_name,
@@ -88,19 +101,19 @@ export async function getRepoOverview(owner, repo) {
       license: repoData.license?.name,
       updated_at: repoData.updated_at,
     },
-    branches: branches.map(b => ({
+    branches: arr(branches).map(b => ({
       name: b.name,
       sha: b.commit?.sha?.substring(0, 7),
       protected: b.protected,
     })),
-    commits: commits.map(c => ({
+    commits: arr(commits).map(c => ({
       sha: c.sha?.substring(0, 7),
       message: c.commit?.message?.split('\n')[0],
       author: c.commit?.author?.name,
       date: c.commit?.author?.date,
       avatar: c.author?.avatar_url,
     })),
-    pulls: pulls.map(p => ({
+    pulls: arr(pulls).map(p => ({
       number: p.number,
       title: p.title,
       state: p.state,
