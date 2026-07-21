@@ -16,19 +16,19 @@
               <span :class="['branch-name', row.kind]">{{ row.name }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="类型" width="90">
+          <el-table-column label="类型" width="90" key="kind">
             <template #default="{ row }">
-              <el-tag size="small" :type="kindTagType(row.kind)">{{ kindLabels[row.kind] || row.kind }}</el-tag>
+              <el-tag size="small" :type="kindTagType(row.kind || 'other')">{{ kindLabels[row.kind || 'other'] || row.kind || '其他' }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="来源" width="70">
+          <el-table-column label="来源" width="70" key="source">
             <template #default="{ row }">{{ row.remote ? '远程' : '本地' }}</template>
           </el-table-column>
           <el-table-column prop="sha" label="SHA" width="120" />
           <el-table-column prop="last_commit_author" label="提交者" width="110" />
           <el-table-column prop="last_commit_date" label="提交时间" width="170" />
           <el-table-column prop="last_commit_subject" label="提交信息" min-width="200" show-overflow-tooltip />
-          <el-table-column label="操作" width="150" show-overflow-tooltip>
+          <el-table-column label="操作" width="150" show-overflow-tooltip key="actions">
             <template #default="{ row }">
               <el-button size="small" text type="success" :icon="Switch"
                 :disabled="row.kind === 'main'"
