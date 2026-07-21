@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT DEFAULT 'viewer',
   status TEXT DEFAULT 'active',
   last_login_at TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS managed_repos (
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS managed_repos (
   ssh_url TEXT DEFAULT '',
   clone_url TEXT DEFAULT '',
   local_path TEXT DEFAULT '',
-  added_at TEXT DEFAULT (datetime('now')),
+  added_at TEXT DEFAULT (datetime('now', 'localtime')),
   added_by TEXT DEFAULT ''
 );
 
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   detail TEXT,
   status TEXT,
   ip TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 `);
 
@@ -87,8 +87,8 @@ export function syncManagedRepos() {
 
 // ---- audit ----
 export function audit({ userId, username, action, resource, detail, status, ip }) {
-  db.prepare(`INSERT INTO audit_logs (user_id, username, action, resource, detail, status, ip)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+  db.prepare(`INSERT INTO audit_logs (user_id, username, action, resource, detail, status, ip, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`)
     .run(userId, username, action, resource, typeof detail === 'string' ? detail : JSON.stringify(detail), status, ip);
 }
 
