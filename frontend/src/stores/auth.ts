@@ -18,6 +18,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const isTechLead = computed(() => user.value?.role === 'tech_lead')
+  const isDeveloper = computed(() => user.value?.role === 'tech_lead' || user.value?.role === 'developer')
+  const isViewer = computed(() => user.value?.role === 'viewer')
 
   async function login(username: string, password: string) {
     const { data } = await api.post('/auth/login', { username, password })
@@ -42,5 +44,5 @@ export const useAuthStore = defineStore('auth', () => {
     } catch { logout() }
   }
 
-  return { token, user, isLoggedIn, isTechLead, login, logout, fetchMe }
+  return { token, user, isLoggedIn, isTechLead, isDeveloper, isViewer, login, logout, fetchMe }
 })

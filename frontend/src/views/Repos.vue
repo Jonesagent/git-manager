@@ -44,7 +44,7 @@
 
         <div class="card-actions" @click.stop>
           <el-button size="small" text type="primary" :loading="fetching === r.name"
-            :disabled="!r.initialized || (!auth.isTechLead && auth.user?.role !== 'developer')"
+            :disabled="!r.initialized || !auth.isDeveloper"
             @click="handleFetch(r.name)">同步</el-button>
           <el-button size="small" text @click="goDetail(r.name)">详情</el-button>
           <el-button size="small" text type="danger" :disabled="!auth.isTechLead"

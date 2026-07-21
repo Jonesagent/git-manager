@@ -31,7 +31,7 @@
           <el-table-column label="操作" width="150" show-overflow-tooltip key="actions">
             <template #default="{ row }">
               <el-button size="small" text type="success" :icon="Switch"
-                :disabled="row.kind === 'main'"
+                :disabled="row.kind === 'main' || !auth.isDeveloper"
                 @click="handleCheckout(row)">切换</el-button>
               <el-button size="small" text type="danger" :icon="Delete"
                 :disabled="row.kind === 'main' || !auth.isTechLead"

@@ -8,7 +8,7 @@
       <el-input v-model="search" placeholder="搜索分支..." clearable size="default" style="margin-left:12px;width:260px" />
       <el-button @click="loadBranches" :icon="Refresh" :loading="loadingBranches" style="margin-left:8px">刷新</el-button>
       <el-button type="primary" @click="showCreateDialog = true" :icon="Plus" style="margin-left:8px"
-        :disabled="!selectedRepo">创建分支</el-button>
+        :disabled="!selectedRepo || !auth.isDeveloper">创建分支</el-button>
     </div>
 
     <!-- 分支列表 -->
