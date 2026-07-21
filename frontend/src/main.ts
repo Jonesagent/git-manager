@@ -19,3 +19,5 @@ for (const [key, comp] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, comp)
 }
 app.mount('#app')
+// cache-bust: 2026-07-21-force-update
+// cache-bust-2: 2026-07-21-1500-force-all-chunks-change
